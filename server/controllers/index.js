@@ -2,7 +2,7 @@
 const models = require('../models');
 
 // get the Cat model
-const { Cat } = models;
+const { Cat, Dog } = models;
 
 // default fake data so that we have something to work with until we make a real Cat
 const defaultData = {
@@ -83,6 +83,18 @@ const hostPage3 = (req, res) => {
   res.render('page3');
 };
 
+const hostPage4 = async (req, res) => {
+  // will query the database
+  // .lean() just gives back the javascript obect
+  // .exec() runs the code but doen't need -> allows for better error messages
+  try {
+    const docs = await Dog.find({}).lean().exec();
+    return res.render('page4', { dogs: docs });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: 'failed to find dogs' });
+  }
+};
 // Get name will return the name of the last added cat.
 const getName = (req, res) => res.json({ name: lastAdded.name });
 
@@ -169,16 +181,6 @@ const searchName = async (req, res) => {
   */
   let doc;
   try {
-    /* Just like Cat.find() in hostPage1() above, Mongoose models also have a .findOne()
-       that will find a single document in the database that matches the search parameters.
-       This function is faster, as it will stop searching after it finds one document that
-       matches the parameters. The downside is you cannot get multiple responses with it.
-
-       One of three things will occur when trying to findOne in the database.
-        1) An error will be thrown, which will stop execution of the try block and move to the catch block.
-        2) Everything works, but the name was not found in the database returning an empty doc object.
-        3) Everything works, and an object matching the search is found.
-    */
     doc = await Cat.findOne({ name: req.query.name }).exec();
   } catch (err) {
     // If there is an error, log it and send the user an error message.
@@ -239,15 +241,80 @@ const notFound = (req, res) => {
   });
 };
 
+const createDog = async (req, res) => {
+  if (!req.body.name || !req.body.breed || !req.body.age) {
+    return res.status(400).json({ error: 'name, breed, and age are all required' });
+  }
+
+  const dogData = {
+    name: req.body.name,
+    breed: req.body.breed,
+    age: req.body.age,
+  };
+
+  const newDog = new Dog(dogData);
+  // adding it to the database
+  try {
+    // .save() sends/updates database
+    await newDog.save();
+    console.log(newDog);
+    return res.json({
+      name: req.body.name,
+      breed: req.body.breed,
+      age: req.body.age,
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: 'failed to create dog' });
+  }
+};
+
+// Function to handle searching a cat by name.
+const findDogByName = async (req, res) => {
+  if (!req.body.name) {
+    return res.status(400).json({ error: 'Name is required to perform a search' });
+  }
+  const query = {
+    name: req.body.name,
+  };
+
+  let doc;
+
+  try {
+    doc = await Dog.findOne(query).select('name breed age').exec();
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: 'Something went wrong searching for a dog' });
+  }
+
+  if (!doc) {
+    return res.json({ message: 'No dog found with that name' });
+  }
+
+  doc.age++;
+  doc.save().then(() => res.json({
+    name: doc.name,
+    breed: doc.breed,
+    age: doc.age,
+  })).catch((err) => {
+    console.log(err);
+    return res.status(500).json({ error: 'Could not update the dogs age' });
+  });
+  return 'Fixes: Expected to return a value at the end of async arrow function -- consistent-return, error';
+};
+
 // export the relevant public controller functions
 module.exports = {
   index: hostIndex,
   page1: hostPage1,
   page2: hostPage2,
   page3: hostPage3,
+  page4: hostPage4,
   getName,
   setName,
   updateLast,
   searchName,
   notFound,
+  createDog,
+  findDogByName,
 };
